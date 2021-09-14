@@ -21,7 +21,7 @@ extern int errno;
 //客户端向服务器传送的结构：
 struct student
 {
-	char name[32];
+	char name[100];
 	int age;
 };
 
