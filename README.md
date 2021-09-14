@@ -4,6 +4,8 @@ A course lab for Computer Networks at ZJU.
 
 Basic socket programming.
 
+*Server on Linux, Client on Windows*
+
 ## Functions
 
 * basic connections and disconnections
