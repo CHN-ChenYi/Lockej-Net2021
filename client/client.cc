@@ -23,7 +23,6 @@ int main(int argc, char *argv[])
 	string ipaddr;
 	int port;
 	struct sockaddr_in serverAddr;
-	struct student stu;
 
 	while (1)
 	{
@@ -33,6 +32,7 @@ int main(int argc, char *argv[])
 		switch (option)
 		{
 		case 1:
+		{
 			cout << "please enter IP address:" << endl;
 			cin >> ipaddr;
 			cout << "please enter port number:" << endl;
@@ -62,8 +62,9 @@ int main(int argc, char *argv[])
 
 			printf("Connected!\n");
 			break;
-
+		}
 		case 2:
+		{
 			//关闭socket
 			msg_type = static_cast<unsigned>(MsgType::kDisconnect);
 			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
@@ -72,8 +73,9 @@ int main(int argc, char *argv[])
 			cout << "Connection to " << ipaddr << " : " << port << " is closed! \n"
 				 << endl;
 			break;
-
+		}
 		case 3:
+		{
 			//获取时间
 			time_t cur_time;
 			struct tm *timestr;
@@ -95,8 +97,9 @@ int main(int argc, char *argv[])
 				}
 			}
 			break;
-
+		}
 		case 4:
+		{
 			string Hname;
 			size_t name_len;
 			msg_type = static_cast<unsigned>(MsgType::kHostname);
@@ -117,8 +120,9 @@ int main(int argc, char *argv[])
 				}
 			}
 			break;
-
+		}
 		case 5:
+		{
 			size_t list_len;
 			int fd;
 			sockaddr_in addr;
@@ -145,7 +149,7 @@ int main(int argc, char *argv[])
 				}
 			}
 			break;
-
+		}
 		case 7:
 			cout
 				<< "Bye bye~\n\n";
