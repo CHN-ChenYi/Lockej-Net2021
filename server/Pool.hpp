@@ -2,12 +2,30 @@
 
 #include <netinet/in.h>
 
+#include <atomic>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
+
+#include "Queue.hpp"
 
 using socket_fd = int;
 
-void Init(const std::string &hostname);
+class Pool {
+ public:
+  Pool(const std::string &hostname);
+  ~Pool();
+  void AddClient(const sockaddr_in &addr, const socket_fd &fd);
 
-void AddClient(const sockaddr_in &addr, const socket_fd &fd);
+ private:
+  std::string hostname_;
+  size_t hostname_len_;
 
-void Exit();
+  std::atomic<bool> is_exit_;
+  std::mutex clients_mutex_;
+  std::map<socket_fd, sockaddr_in> clients_;
+  std::map<socket_fd, std::unique_ptr<std::thread>> threads_;
+  std::map<socket_fd, ThreadSafeQueue<std::string>> msg_queues_;
+};

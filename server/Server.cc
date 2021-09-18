@@ -1,95 +1,47 @@
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
-#define SERVER_PORT	6666 //侦听端口
+#include <climits>
+#include <cstring>
 
-extern int errno;
+#include "../MsgDef.hpp"
+#include "Pool.hpp"
 
-//客户端向服务器传送的结构：
-struct student
-{
-	char name[32];
-	int age;
-};
+int main() {
+  char hostname[HOST_NAME_MAX];
+  gethostname(hostname, HOST_NAME_MAX);
+  Pool pool(hostname);
 
-int main()
-{	
-	int sockfd, comfd;
-	struct sockaddr_in serverAddr, clientAddr;
-	int ret, iClientSize;
-	struct student stu;
-	void *ptr;
-	
-	// 创建一个socket：
-	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-	{
-		printf("socket() failed! code:%d\n", errno);
-		return -1;
-	}
-		
-	// 绑定：
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(SERVER_PORT);
-	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	bzero(&(serverAddr.sin_zero), 8);
-	if(bind(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
-	{
-		printf("bind() failed! code:%d\n", errno);
-		close(sockfd);
-		return -1;
-	}
-		
-	// 侦听控制连接请求：
-	if(listen(sockfd, 5) == -1)
-	{
-		printf("listen() failed! code:%d\n", errno);
-		close(sockfd);
-		return -1;
-	}
-		
-	printf("Waiting for client connecting!\n");
-	printf("tips : Ctrl+c to quit!\n");
-	
-	//接受客户端连接请求：
-	iClientSize = sizeof(struct sockaddr_in);
-	if((comfd = accept(sockfd, (struct sockaddr *)&clientAddr,(socklen_t *) &iClientSize)) == -1)
-	{
-		printf("accept() failed! code:%d\n", errno);
-		close(sockfd);
-		return -1;
-	}
+  // create
+  socket_fd sockfd;
+  sockaddr_in serverAddr;
+  if (~(sockfd = socket(AF_INET, SOCK_STREAM, 0))) {
+    // TODO
+  }
 
-	printf("Accepted client: %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
-	
-	//接收客户端的数据：		
-	int nLeft = sizeof(stu);
-	ptr = &stu;
-	while(nLeft >0)
-	{
-		//接收数据：
-		ret = recv(comfd, ptr, nLeft, 0);
-		if(ret <= 0)
-		{
-			printf("recv() failed!\n");
-			close(sockfd);//关闭套接字
-			close(comfd);
-			return -1;
-		}
-	
-		nLeft -= ret;
-		ptr = (char *)ptr + ret;
-	}
-	
-	printf("name: %s\nage:%d\n", stu.name, stu.age);
+  // bind
+  serverAddr.sin_family = AF_INET;
+  serverAddr.sin_port = htons(kServerPort);
+  serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  bzero(&(serverAddr.sin_zero), 8);
+  if (~bind(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr))) {
+    // TODO
+  }
 
-	close(sockfd);//关闭套接字
-	close(comfd);
-	return 0;
+  // listen
+  if (~listen(sockfd, 5)) {
+    // TODO
+  }
+
+  for (;;) {
+    socket_fd comfd;
+    sockaddr_in clientAddr;
+    auto socketaddr_size = sizeof(sockaddr_in);
+    if (~(comfd = accept(sockfd, reinterpret_cast<sockaddr *>(&clientAddr),
+                         reinterpret_cast<socklen_t *>(&socketaddr_size)))) {
+      // TODO
+    }
+    pool.AddClient(clientAddr, comfd);
+  }
+
+  return 0;
 }

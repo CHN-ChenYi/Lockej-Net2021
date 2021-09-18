@@ -2,24 +2,9 @@
 
 #include <sys/ioctl.h>
 
-#include <atomic>
 #include <ctime>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <thread>
 
 #include "../MsgDef.hpp"
-#include "Queue.hpp"
-
-static std::string hostname;
-static size_t hostname_len;
-
-static std::atomic<bool> is_exit;
-static std::mutex clients_mutex;
-static std::map<socket_fd, sockaddr_in> clients;
-static std::map<socket_fd, std::unique_ptr<std::thread>> threads;
-static std::map<socket_fd, ThreadSafeQueue<std::string>> msg_queues;
 
 template <typename... Args>
 void SendMessage(Args &&...args) {
@@ -35,38 +20,45 @@ void RecvMessage(Args &&...args) {
   }
 }
 
-void Init(const std::string &hostname) {
-  ::hostname = hostname;
-  hostname_len = ::hostname.length();
+Pool::Pool(const std::string &hostname) {
+  hostname_ = hostname;
+  hostname_len_ = hostname_.length();
 }
 
-void AddClient(const sockaddr_in &addr, const socket_fd &fd) {
-  if (is_exit) return;
+Pool::~Pool() {
+  is_exit_ = true;
+  for (const auto &thread : threads_) {
+    if (thread.second->joinable()) thread.second->join();
+  }
+}
+
+void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
+  if (is_exit_) return;
   {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    clients[fd] = addr;
+    std::lock_guard<std::mutex> lock(clients_mutex_);
+    clients_[fd] = addr;
   }
   auto f = [&, addr, fd]() {
     unsigned msg_type;
     for (;;) {
       // exit
-      if (is_exit) {
+      if (is_exit_) {
         msg_type = static_cast<unsigned>(MsgType::kDisconnect);
         SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
         break;
       }
       // forward message
-      if (!msg_queues[fd].empty()) {
+      if (!msg_queues_[fd].empty()) {
         msg_type = static_cast<unsigned>(MsgType::kMsg);
         SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
         std::string msg;
-        msg_queues[fd].pop(msg);
+        msg_queues_[fd].pop(msg);
         const size_t msg_len = msg.length();
         SendMessage(fd, reinterpret_cast<const void *>(&msg_len),
                     sizeof(msg_len), 0);
-        SendMessage(fd, reinterpret_cast<const void *>(msg.data()),
+        SendMessage(fd, reinterpret_cast<void *>(msg.data()),
                     sizeof(char) * msg_len, 0);
       }
       // handle request
@@ -87,18 +79,18 @@ void AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         } else if (msg_type_ == MsgType::kHostname) {
           SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                       0);
-          SendMessage(fd, reinterpret_cast<void *>(&hostname_len),
-                      sizeof(hostname_len), 0);
-          SendMessage(fd, reinterpret_cast<const void *>(hostname.data()),
-                      sizeof(char) * hostname_len, 0);
+          SendMessage(fd, reinterpret_cast<void *>(&hostname_len_),
+                      sizeof(hostname_len_), 0);
+          SendMessage(fd, reinterpret_cast<void *>(hostname_.data()),
+                      sizeof(char) * hostname_len_, 0);
         } else if (msg_type_ == MsgType::kList) {
-          std::lock_guard<std::mutex> lock(clients_mutex);
-          const size_t list_len = clients.size();
+          std::lock_guard<std::mutex> lock(clients_mutex_);
+          const size_t list_len = clients_.size();
           SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                       0);
           SendMessage(fd, reinterpret_cast<const void *>(&list_len),
                       sizeof(list_len), 0);
-          for (const auto &client : clients) {
+          for (const auto &client : clients_) {
             SendMessage(fd, reinterpret_cast<const void *>(&client.first),
                         sizeof(client.first), 0);
             SendMessage(fd, reinterpret_cast<const void *>(&client.second),
@@ -112,10 +104,10 @@ void AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           RecvMessage(fd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len),
                       0);
           msg.resize(msg_len);
-          RecvMessage(fd, reinterpret_cast<void *>(&msg.data()[0]),
+          RecvMessage(fd, reinterpret_cast<void *>(msg.data()),
                       sizeof(char) * msg_len, 0);
-          if (msg_queues.count(dst)) {
-            msg_queues[dst].push(msg);
+          if (msg_queues_.count(dst)) {
+            msg_queues_[dst].push(msg);
             msg_type = static_cast<unsigned>(MsgType::kSuccess);
             SendMessage(fd, reinterpret_cast<void *>(&msg_type),
                         sizeof(msg_type), 0);
@@ -129,13 +121,6 @@ void AddClient(const sockaddr_in &addr, const socket_fd &fd) {
       }
     }
   };
-  threads[fd] =
+  threads_[fd] =
       std::make_unique<decltype(std::thread(f))>(std::thread(std::move(f)));
-}
-
-void Exit() {
-  is_exit = true;
-  for (const auto &thread : threads) {
-    if (thread.second->joinable()) thread.second->join();
-  }
 }
