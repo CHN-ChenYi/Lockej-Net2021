@@ -4,9 +4,9 @@
 
 ## 数据头
 
-[int]
+[unsigned]
 
-* int
+* unsigned
   * 0 断开连接
   * 1 获取时间
   * 2 获取名字
