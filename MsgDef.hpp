@@ -1,10 +1,11 @@
 #pragma once
 
-enum {
-  kDisconnect,
+enum class MsgType {
+  kDisconnect = 0,
   kTime,
   kHostname,
   kList,
   kMsg,
-  kError
+  kError,
+  kSuccess
 };
