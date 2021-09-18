@@ -4,11 +4,19 @@
 #include <climits>
 #include <cstring>
 #include <iostream>
+#include <string>
 
 #include "../MsgDef.hpp"
 #include "Pool.hpp"
 
-int main() {
+int main(int argc, char **argv) {
+  int port = kServerPort;
+  if (argc == 2) {
+    int tmp = std::stoi(argv[1]);
+    if (0 <= tmp && tmp <= 65535)
+      port = tmp;
+  }
+
   char hostname[HOST_NAME_MAX];
   gethostname(hostname, HOST_NAME_MAX);
   Pool pool(hostname);
@@ -23,7 +31,7 @@ int main() {
 
   // bind
   serverAddr.sin_family = AF_INET;
-  serverAddr.sin_port = htons(kServerPort);
+  serverAddr.sin_port = htons(port);
   serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
   bzero(&(serverAddr.sin_zero), 8);
   if (!~bind(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr))) {
@@ -39,14 +47,14 @@ int main() {
     return -1;
   }
 
-  std::cout << "Listening on port " << kServerPort << std::endl;
+  std::cout << "Listening on port " << port << std::endl;
 
   for (;;) {
     socket_fd comfd;
     sockaddr_in clientAddr;
     auto socketaddr_size = sizeof(sockaddr_in);
     if (!~(comfd = accept(sockfd, reinterpret_cast<sockaddr *>(&clientAddr),
-                         reinterpret_cast<socklen_t *>(&socketaddr_size)))) {
+                          reinterpret_cast<socklen_t *>(&socketaddr_size)))) {
       std::cout << "accept() failed! errno: " << errno << std::endl;
     }
     char addr[INET_ADDRSTRLEN];
