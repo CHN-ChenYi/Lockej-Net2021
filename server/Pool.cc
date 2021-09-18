@@ -1,9 +1,9 @@
 #include "Pool.hpp"
 
 #include <arpa/inet.h>
-#include <sys/ioctl.h>
 
 #include <ctime>
+#include <future>
 #include <iostream>
 
 #include "../MsgDef.hpp"
@@ -25,6 +25,7 @@ void RecvMessage(Args &&...args) {
 }
 
 Pool::Pool(const std::string &hostname) {
+  is_exit_ = false;
   hostname_ = hostname;
   hostname_len_ = hostname_.length();
 }
@@ -42,19 +43,19 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
     std::lock_guard<std::mutex> lock(clients_mutex_);
     clients_[fd] = addr;
   }
-  auto f = [&, addr, fd]() {
-    unsigned msg_type;
+  auto f = [this, addr, fd]() {
+    std::future<unsigned> future;
     for (;;) {
       // exit
       if (is_exit_) {
-        msg_type = static_cast<unsigned>(MsgType::kDisconnect);
+        unsigned msg_type = static_cast<unsigned>(MsgType::kDisconnect);
         SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
         break;
       }
       // forward message
       if (!msg_queues_[fd].empty()) {
-        msg_type = static_cast<unsigned>(MsgType::kMsg);
+        unsigned msg_type = static_cast<unsigned>(MsgType::kMsg);
         MessageInfo msg;
         msg_queues_[fd].pop(msg);
         const size_t msg_len = msg.content.length();
@@ -67,11 +68,17 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                     sizeof(char) * msg_len, 0);
       }
       // handle request
-      int count;
-      ioctl(fd, FIONREAD, &count);
-      if (count) {
-        RecvMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
-                    0);
+      if (!future.valid()) {
+        future = std::async(std::launch::async, [fd]() {
+          unsigned msg_type;
+          RecvMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
+                      0);
+          return msg_type;
+        });
+      }
+      if (future.wait_for(std::chrono::milliseconds(1)) ==
+          std::future_status::ready) {
+        unsigned msg_type = future.get();
         const MsgType msg_type_ = static_cast<MsgType>(msg_type);
         if (msg_type_ == MsgType::kDisconnect) {
           char address[INET_ADDRSTRLEN];
