@@ -1,8 +1,3 @@
-/*
- *	本程序的主要目的在于说明socket编程的基本过程，所以服务器/客户端的交互过程非常简单，
- *  只是由客户端向服务器传送一个学生信息的结构。
- */
-//informLinuxClient.cpp：参数为 serverIP name age
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -79,7 +74,7 @@ int main(int argc, char *argv[])
 			//关闭socket
 			msg_type = static_cast<unsigned>(MsgType::kDisconnect);
 			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
-				cout << "Communication Error, close locally." << endl;			
+				cout << "Communication Error, close locally." << endl;
 			close(sockfd);
 			cout << "Connection to " << ipaddr << " : " << port << " is closed! \n"
 				 << endl;
@@ -87,9 +82,83 @@ int main(int argc, char *argv[])
 
 		case 3:
 			//获取时间
+			time_t cur_time;
+			struct tm *timestr;
+			msg_type = static_cast<unsigned>(MsgType::kTime);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+			else
+			{
+				recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
+				recv(sockfd, reinterpret_cast<void *>(&cur_time), sizeof(cur_time), 0);
+				const MsgType msg_type_ = static_cast<MsgType>(msg_type);
+				const time_t cur_time_ = static_cast<time_t>(cur_time);
+				if (msg_type_ != MsgType::kTime)
+					cout << "Recieve Type Error! Code: " << static_cast<int>(msg_type_) << endl;
+				else
+				{
+					timestr = localtime(&cur_time_);
+					printf("Current Time is: %s", asctime(timestr));
+				}
+			}
+			break;
+
+		case 4:
+			string Hname;
+			size_t name_len;
+			msg_type = static_cast<unsigned>(MsgType::kHostname);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+			else
+			{
+				recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
+				recv(sockfd, reinterpret_cast<void *>(&name_len), sizeof(name_len), 0);
+				Hname.resize(name_len);
+				recv(sockfd, reinterpret_cast<void *>(&Hname.data()), sizeof(char) * name_len, 0);
+				const MsgType msg_type_ = static_cast<MsgType>(msg_type);
+				if (msg_type_ != MsgType::kHostname)
+					cout << "Recieve Type Error! Code: " << static_cast<int>(msg_type_) << endl;
+				else
+				{
+					cout << "HostName is: " << Hname << endl;
+				}
+			}
+
+			break;
+
+		case 5:
+			size_t list_len;
+			int fd;
+			sockaddr_in addr;
+			char addr_str[INET_ADDRSTRLEN];
+			msg_type = static_cast<unsigned>(MsgType::kList);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+			else
+			{
+				recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
+				recv(sockfd, reinterpret_cast<void *>(&list_len), sizeof(list_len), 0);
+				const MsgType msg_type_ = static_cast<MsgType>(msg_type);
+				if(msg_type_ != MsgType::kList)
+					cout << "Recieve Type Error! Code: " << static_cast<int>(msg_type_) << endl;
+				else
+				{
+					for(size_t i = 0; i<list_len; i++, cout << endl)
+					{
+						recv(sockfd, reinterpret_cast<void *>(&fd), sizeof(fd), 0);
+						recv(sockfd, reinterpret_cast<void *>(&addr), sizeof(addr), 0);
+						inet_ntop(AF_INET, &addr.sin_addr, addr_str, sizeof(addr_str));
+						cout << "Socket fd " << fd << " Host Address " << addr_str << " : " << addr.sin_port; 
+					}
+				}
+			}
+
+
+			break;
 
 		case 7:
-			cout << "Bye bye~\n\n";
+			cout
+				<< "Bye bye~\n\n";
 			return 0;
 		default:
 			break;
