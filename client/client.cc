@@ -15,13 +15,6 @@ using namespace std;
 
 extern int errno;
 
-//客户端向服务器传送的结构：
-struct student
-{
-	char name[100];
-	int age;
-};
-
 int main(int argc, char *argv[])
 {
 	int sockfd;
@@ -114,7 +107,7 @@ int main(int argc, char *argv[])
 				recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
 				recv(sockfd, reinterpret_cast<void *>(&name_len), sizeof(name_len), 0);
 				Hname.resize(name_len);
-				recv(sockfd, reinterpret_cast<void *>(&Hname.data()), sizeof(char) * name_len, 0);
+				recv(sockfd, reinterpret_cast<void *>(Hname.data()), sizeof(char) * name_len, 0);
 				const MsgType msg_type_ = static_cast<MsgType>(msg_type);
 				if (msg_type_ != MsgType::kHostname)
 					cout << "Recieve Type Error! Code: " << static_cast<int>(msg_type_) << endl;
@@ -123,7 +116,6 @@ int main(int argc, char *argv[])
 					cout << "HostName is: " << Hname << endl;
 				}
 			}
-
 			break;
 
 		case 5:
@@ -152,14 +144,13 @@ int main(int argc, char *argv[])
 					}
 				}
 			}
-
-
 			break;
 
 		case 7:
 			cout
 				<< "Bye bye~\n\n";
 			return 0;
+
 		default:
 			break;
 		}

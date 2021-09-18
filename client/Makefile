@@ -1,7 +1,7 @@
 .PHONY:clean
 
 CC = g++
-CCFLAGS = -lpthread -Wall
+CCFLAGS = -lpthread -Wall -std=c++17
 SOURCE = client.cc
 
 all: $(SOURCE)
