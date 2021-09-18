@@ -27,5 +27,10 @@ class Pool {
   std::mutex clients_mutex_;
   std::map<socket_fd, sockaddr_in> clients_;
   std::map<socket_fd, std::unique_ptr<std::thread>> threads_;
-  std::map<socket_fd, ThreadSafeQueue<std::string>> msg_queues_;
+
+  struct MessageInfo {
+    socket_fd src;
+    std::string content;
+  };
+  std::map<socket_fd, ThreadSafeQueue<MessageInfo>> msg_queues_;
 };

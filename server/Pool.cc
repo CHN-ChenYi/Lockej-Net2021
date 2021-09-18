@@ -51,14 +51,15 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
       // forward message
       if (!msg_queues_[fd].empty()) {
         msg_type = static_cast<unsigned>(MsgType::kMsg);
+        MessageInfo msg;
+        msg_queues_[fd].pop(msg);
+        const size_t msg_len = msg.content.length();
         SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
-        std::string msg;
-        msg_queues_[fd].pop(msg);
-        const size_t msg_len = msg.length();
+        SendMessage(fd, reinterpret_cast<void *>(&msg.src), sizeof(msg.src), 0);
         SendMessage(fd, reinterpret_cast<const void *>(&msg_len),
                     sizeof(msg_len), 0);
-        SendMessage(fd, reinterpret_cast<void *>(msg.data()),
+        SendMessage(fd, reinterpret_cast<void *>(msg.content.data()),
                     sizeof(char) * msg_len, 0);
       }
       // handle request
@@ -107,7 +108,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           RecvMessage(fd, reinterpret_cast<void *>(msg.data()),
                       sizeof(char) * msg_len, 0);
           if (msg_queues_.count(dst)) {
-            msg_queues_[dst].push(msg);
+            msg_queues_[dst].push(MessageInfo{fd, msg});
             msg_type = static_cast<unsigned>(MsgType::kSuccess);
             SendMessage(fd, reinterpret_cast<void *>(&msg_type),
                         sizeof(msg_type), 0);
