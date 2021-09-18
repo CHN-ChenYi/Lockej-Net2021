@@ -8,17 +8,19 @@
 
 #include "../MsgDef.hpp"
 
+extern int errno;
+
 template <typename... Args>
 void SendMessage(Args &&...args) {
-  if (~send(std::forward<Args>(args)...)) {
-    // TODO
+  if (!~send(std::forward<Args>(args)...)) {
+    std::cout << "send() failed! errno: " << errno << std::endl;
   }
 }
 
 template <typename... Args>
 void RecvMessage(Args &&...args) {
-  if (~recv(std::forward<Args>(args)...) == -1) {
-    // TODO
+  if (!~recv(std::forward<Args>(args)...)) {
+    std::cout << "recv() failed! errno: " << errno << std::endl;
   }
 }
 
@@ -74,7 +76,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         if (msg_type_ == MsgType::kDisconnect) {
           char address[INET_ADDRSTRLEN];
           inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
-          std::cout << address << ':' << addr.sin_port << " disconnected." << std::endl;
+          std::cout << address << ':' << addr.sin_port << " disconnected."
+                    << std::endl;
           break;
         } else if (msg_type_ == MsgType::kTime) {
           std::time_t cur_time = time(nullptr);
@@ -122,7 +125,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
             SendMessage(fd, reinterpret_cast<void *>(&msg_type),
                         sizeof(msg_type), 0);
           }
-        } else {  // TODO
+        } else {
+          std::cout << "unknown message type: " << msg_type << std::endl;
         }
       }
     }
