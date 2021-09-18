@@ -1,7 +1,9 @@
+#include <arpa/inet.h>
 #include <unistd.h>
 
 #include <climits>
 #include <cstring>
+#include <iostream>
 
 #include "../MsgDef.hpp"
 #include "Pool.hpp"
@@ -32,6 +34,8 @@ int main() {
     // TODO
   }
 
+  std::cout << "Listening on port " << kServerPort << std::endl;
+
   for (;;) {
     socket_fd comfd;
     sockaddr_in clientAddr;
@@ -40,6 +44,9 @@ int main() {
                          reinterpret_cast<socklen_t *>(&socketaddr_size)))) {
       // TODO
     }
+    char addr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &clientAddr.sin_addr, addr, sizeof(addr));
+    std::cout << addr << ':' << clientAddr.sin_port << " connected." << std::endl;
     pool.AddClient(clientAddr, comfd);
   }
 

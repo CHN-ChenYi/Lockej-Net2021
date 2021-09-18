@@ -1,8 +1,10 @@
 #include "Pool.hpp"
 
+#include <arpa/inet.h>
 #include <sys/ioctl.h>
 
 #include <ctime>
+#include <iostream>
 
 #include "../MsgDef.hpp"
 
@@ -70,6 +72,9 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                     0);
         const MsgType msg_type_ = static_cast<MsgType>(msg_type);
         if (msg_type_ == MsgType::kDisconnect) {
+          char address[INET_ADDRSTRLEN];
+          inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
+          std::cout << address << ':' << addr.sin_port << " disconnected." << std::endl;
           break;
         } else if (msg_type_ == MsgType::kTime) {
           std::time_t cur_time = time(nullptr);
