@@ -1,10 +1,10 @@
 #include "Pool.hpp"
 
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #include <ctime>
-#include <future>
 #include <iostream>
 
 #include "../MsgDef.hpp"
@@ -45,11 +45,11 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
     clients_[fd] = addr;
   }
   auto f = [this, addr, fd]() {
-    std::future<unsigned> future;
+    unsigned msg_type;
     for (;;) {
       // exit
       if (is_exit_) {
-        unsigned msg_type = static_cast<unsigned>(MsgType::kDisconnect);
+        msg_type = static_cast<unsigned>(MsgType::kDisconnect);
         SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
         close(fd);
@@ -57,7 +57,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
       }
       // forward message
       if (!msg_queues_[fd].empty()) {
-        unsigned msg_type = static_cast<unsigned>(MsgType::kMsg);
+        msg_type = static_cast<unsigned>(MsgType::kMsg);
         MessageInfo msg;
         msg_queues_[fd].pop(msg);
         const size_t msg_len = msg.content.length();
@@ -71,18 +71,12 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         std::cout << "Sent Message to " << fd << " from " << msg.src << ": "
                   << msg.content << std::endl;
       }
-      // handle request
-      if (!future.valid()) {
-        future = std::async(std::launch::async, [fd]() {
-          unsigned msg_type;
-          RecvMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
-                      0);
-          return msg_type;
-        });
-      }
-      if (future.wait_for(std::chrono::milliseconds(1)) ==
-          std::future_status::ready) {
-        unsigned msg_type = future.get();
+      // handle requestint count;
+      int count;
+      ioctl(fd, FIONREAD, &count);
+      if (count) {
+        RecvMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
+                    0);
         const MsgType msg_type_ = static_cast<MsgType>(msg_type);
         if (msg_type_ == MsgType::kDisconnect) {
           std::lock_guard<std::mutex> lock(clients_mutex_);
@@ -128,8 +122,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           msg.resize(msg_len);
           RecvMessage(fd, reinterpret_cast<void *>(msg.data()),
                       sizeof(char) * msg_len, 0);
-          std::cout << "Sent Message to " << dst << " from " << fd << ": " << msg
-                    << std::endl;
+          std::cout << "Sent Message to " << dst << " from " << fd << ": "
+                    << msg << std::endl;
           if (msg_queues_.count(dst)) {
             msg_queues_[dst].push(MessageInfo{fd, msg});
             msg_type = static_cast<unsigned>(MsgType::kSuccess);
