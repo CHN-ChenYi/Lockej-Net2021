@@ -78,15 +78,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         RecvMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
         const MsgType msg_type_ = static_cast<MsgType>(msg_type);
-        if (msg_type_ == MsgType::kDisconnect) {
-          std::lock_guard<std::mutex> lock(clients_mutex_);
-          clients_.erase(fd);
-          char address[INET_ADDRSTRLEN];
-          inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
-          std::cout << address << ':' << addr.sin_port << " disconnected."
-                    << std::endl;
-          break;
-        } else if (msg_type_ == MsgType::kTime) {
+        if (msg_type_ == MsgType::kTime) {
           std::time_t cur_time = time(nullptr);
           SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                       0);
@@ -135,7 +127,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                         sizeof(msg_type), 0);
           }
         } else {
-          std::cout << "unknown message type: " << msg_type << std::endl;
+          if (msg_type_ != MsgType::kDisconnect)
+            std::cout << "unknown message type: " << msg_type << std::endl;
           std::lock_guard<std::mutex> lock(clients_mutex_);
           clients_.erase(fd);
           char address[INET_ADDRSTRLEN];
