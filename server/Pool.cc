@@ -1,6 +1,7 @@
 #include "Pool.hpp"
 
 #include <arpa/inet.h>
+#include <unistd.h>
 
 #include <ctime>
 #include <future>
@@ -51,6 +52,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         unsigned msg_type = static_cast<unsigned>(MsgType::kDisconnect);
         SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
+        close(fd);
         break;
       }
       // forward message
@@ -66,6 +68,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                     sizeof(msg_len), 0);
         SendMessage(fd, reinterpret_cast<void *>(msg.content.data()),
                     sizeof(char) * msg_len, 0);
+        std::cout << "Sent Message to " << fd << " from " << msg.src << ": "
+                  << msg.content << std::endl;
       }
       // handle request
       if (!future.valid()) {
@@ -81,6 +85,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         unsigned msg_type = future.get();
         const MsgType msg_type_ = static_cast<MsgType>(msg_type);
         if (msg_type_ == MsgType::kDisconnect) {
+          std::lock_guard<std::mutex> lock(clients_mutex_);
+          clients_.erase(fd);
           char address[INET_ADDRSTRLEN];
           inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
           std::cout << address << ':' << addr.sin_port << " disconnected."
@@ -122,6 +128,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           msg.resize(msg_len);
           RecvMessage(fd, reinterpret_cast<void *>(msg.data()),
                       sizeof(char) * msg_len, 0);
+          std::cout << "Sent Message to " << dst << " from " << fd << ": " << msg
+                    << std::endl;
           if (msg_queues_.count(dst)) {
             msg_queues_[dst].push(MessageInfo{fd, msg});
             msg_type = static_cast<unsigned>(MsgType::kSuccess);
@@ -134,6 +142,13 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           }
         } else {
           std::cout << "unknown message type: " << msg_type << std::endl;
+          std::lock_guard<std::mutex> lock(clients_mutex_);
+          clients_.erase(fd);
+          char address[INET_ADDRSTRLEN];
+          inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
+          std::cout << address << ':' << addr.sin_port << " disconnected."
+                    << std::endl;
+          break;
         }
       }
     }
