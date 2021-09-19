@@ -135,27 +135,65 @@ int main(int argc, char *argv[])
 				recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
 				recv(sockfd, reinterpret_cast<void *>(&list_len), sizeof(list_len), 0);
 				const MsgType msg_type_ = static_cast<MsgType>(msg_type);
-				if(msg_type_ != MsgType::kList)
+				if (msg_type_ != MsgType::kList)
 					cout << "Recieve Type Error! Code: " << static_cast<int>(msg_type_) << endl;
 				else
 				{
-					for(size_t i = 0; i<list_len; i++, cout << endl)
+					for (size_t i = 0; i < list_len; i++, cout << endl)
 					{
 						recv(sockfd, reinterpret_cast<void *>(&fd), sizeof(fd), 0);
 						recv(sockfd, reinterpret_cast<void *>(&addr), sizeof(addr), 0);
 						inet_ntop(AF_INET, &addr.sin_addr, addr_str, sizeof(addr_str));
-						cout << "Socket fd " << fd << " Host Address " << addr_str << " : " << addr.sin_port; 
+						cout << "Socket fd " << fd << " Host Address " << addr_str << " : " << addr.sin_port;
 					}
 				}
 			}
 			break;
 		}
+
+		case 6:
+		{
+			int dst;
+			string msg;
+			size_t msg_len;
+			msg_type = static_cast<unsigned>(MsgType::kMsg);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+			else
+			{
+				cout << "please enter your destination host:" << endl;
+				cin >> dst;
+				if (send(sockfd, reinterpret_cast<void *>(&dst), sizeof(dst), 0) == -1)
+					cout << "Communication Error! " << endl;
+				else
+				{
+					cout << "please enter your message to host " << dst << " :" << endl;
+					cin >> msg;
+					msg_len = msg.length() * sizeof(char);
+					if (send(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0) == -1)
+						cout << "Communication Error! " << endl;
+					else if (send(sockfd, reinterpret_cast<void *>(msg.data()), msg_len, 0) == -1)
+						cout << "Communication Error! " << endl;
+					else
+					{
+						recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
+						const MsgType msg_type_ = static_cast<MsgType>(msg_type);
+						if (msg_type_ == MsgType::kSuccess)						
+							cout << "Message Sent Success!\n" << endl;						
+						else
+							cout << "Message Sent Error!\n" << endl;
+					}
+				}
+			}
+			break;
+		}
+
 		case 7:
-			cout
-				<< "Bye bye~\n\n";
+			cout << "Bye bye~" << endl;
 			return 0;
 
 		default:
+			cout << "Wrong Option Number!" << endl;
 			break;
 		}
 
