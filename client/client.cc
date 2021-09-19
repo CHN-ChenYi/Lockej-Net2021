@@ -9,6 +9,9 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <thread>
+#include <atomic>
+#include <future>
 #include "../MsgDef.hpp"
 
 using namespace std;
@@ -23,6 +26,20 @@ int main(int argc, char *argv[])
 	string ipaddr;
 	int port;
 	struct sockaddr_in serverAddr;
+
+	std::atomic<bool> heart_beating = true;
+	std::future<void> alive = std::async(
+		std::launch::async,
+		[](int *fd, std::atomic<bool> *heart_beating)
+		{
+			unsigned msg_type = static_cast<unsigned>(MsgType::kHeartBeat);
+			while (*heart_beating)
+			{
+				std::this_thread::sleep_for(kHeartBeatInterval);
+				send(*fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
+			}
+		},
+		&sockfd, &heart_beating);
 
 	while (1)
 	{
@@ -189,6 +206,7 @@ int main(int argc, char *argv[])
 		}
 
 		case 7:
+			heart_beating = false;
 			cout << "Bye bye~" << endl;
 			return 0;
 

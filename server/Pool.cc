@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <ctime>
+#include <future>
 #include <iostream>
 
 #include "../MsgDef.hpp"
@@ -45,13 +46,44 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
     clients_[fd] = addr;
   }
   auto f = [this, addr, fd]() {
+    std::mutex mutex;
+    std::atomic<bool> recv_heartbeat = false;
+    std::future<void> alive = std::async(
+        std::launch::async,
+        [fd](std::mutex *const mutex, std::atomic<bool> *recv_heartbeat) {
+          int heartbeat_counter = 0;
+          unsigned msg_type = static_cast<unsigned>(MsgType::kHeartBeat);
+          for (;;) {
+            std::this_thread::sleep_for(kHeartBeatInterval);
+            // { // TODO: uncomment this block
+            //   std::lock_guard<std::mutex> lock(*mutex);
+            //   if (!~send(fd, reinterpret_cast<void *>(&msg_type),
+            //              sizeof(msg_type), 0)) {
+            //     if (errno == 104 || errno == 9) return;  // peer closed || closed by server
+            //     std::cout << "send() heartbeat failed! errno: " << errno
+            //               << std::endl;
+            //   }
+            // }
+            if (*recv_heartbeat) {
+              heartbeat_counter = 0;
+              *recv_heartbeat = false;
+            } else {
+              heartbeat_counter++;
+              if (heartbeat_counter >= kHeartBeatThreshold) return;
+            }
+          }
+        },
+        &mutex, &recv_heartbeat);
     unsigned msg_type;
     for (;;) {
       // exit
       if (is_exit_) {
         msg_type = static_cast<unsigned>(MsgType::kDisconnect);
-        SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
-                    0);
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
+                      0);
+        }
         close(fd);
         return;
       }
@@ -61,13 +93,17 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         MessageInfo msg;
         msg_queues_[fd].pop(msg);
         const size_t msg_len = msg.content.length();
-        SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
-                    0);
-        SendMessage(fd, reinterpret_cast<void *>(&msg.src), sizeof(msg.src), 0);
-        SendMessage(fd, reinterpret_cast<const void *>(&msg_len),
-                    sizeof(msg_len), 0);
-        SendMessage(fd, reinterpret_cast<void *>(msg.content.data()),
-                    sizeof(char) * msg_len, 0);
+        {
+          std::lock_guard<std::mutex> lock(mutex);
+          SendMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
+                      0);
+          SendMessage(fd, reinterpret_cast<void *>(&msg.src), sizeof(msg.src),
+                      0);
+          SendMessage(fd, reinterpret_cast<const void *>(&msg_len),
+                      sizeof(msg_len), 0);
+          SendMessage(fd, reinterpret_cast<void *>(msg.content.data()),
+                      sizeof(char) * msg_len, 0);
+        }
         std::cout << "Sent Message to " << fd << " from " << msg.src << ": "
                   << msg.content << std::endl;
       }
@@ -81,12 +117,16 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         switch (msg_type_) {
           case MsgType::kTime: {
             std::time_t cur_time = time(nullptr);
-            SendMessage(fd, reinterpret_cast<void *>(&msg_type),
-                        sizeof(msg_type), 0);
-            SendMessage(fd, reinterpret_cast<void *>(&cur_time),
-                        sizeof(cur_time), 0);
+            {
+              std::lock_guard<std::mutex> lock(mutex);
+              SendMessage(fd, reinterpret_cast<void *>(&msg_type),
+                          sizeof(msg_type), 0);
+              SendMessage(fd, reinterpret_cast<void *>(&cur_time),
+                          sizeof(cur_time), 0);
+            }
           } break;
           case MsgType::kHostname: {
+            std::lock_guard<std::mutex> lock(mutex);
             SendMessage(fd, reinterpret_cast<void *>(&msg_type),
                         sizeof(msg_type), 0);
             SendMessage(fd, reinterpret_cast<void *>(&hostname_len_),
@@ -97,15 +137,18 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           case MsgType::kList: {
             std::lock_guard<std::mutex> lock(clients_mutex_);
             const size_t list_len = clients_.size();
-            SendMessage(fd, reinterpret_cast<void *>(&msg_type),
-                        sizeof(msg_type), 0);
-            SendMessage(fd, reinterpret_cast<const void *>(&list_len),
-                        sizeof(list_len), 0);
-            for (const auto &client : clients_) {
-              SendMessage(fd, reinterpret_cast<const void *>(&client.first),
-                          sizeof(client.first), 0);
-              SendMessage(fd, reinterpret_cast<const void *>(&client.second),
-                          sizeof(client.second), 0);
+            {
+              std::lock_guard<std::mutex> lock(mutex);
+              SendMessage(fd, reinterpret_cast<void *>(&msg_type),
+                          sizeof(msg_type), 0);
+              SendMessage(fd, reinterpret_cast<const void *>(&list_len),
+                          sizeof(list_len), 0);
+              for (const auto &client : clients_) {
+                SendMessage(fd, reinterpret_cast<const void *>(&client.first),
+                            sizeof(client.first), 0);
+                SendMessage(fd, reinterpret_cast<const void *>(&client.second),
+                            sizeof(client.second), 0);
+              }
             }
           } break;
           case MsgType::kMsg: {
@@ -123,17 +166,27 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
             if (msg_queues_.count(dst)) {
               msg_queues_[dst].push(MessageInfo{fd, msg});
               msg_type = static_cast<unsigned>(MsgType::kSuccess);
-              SendMessage(fd, reinterpret_cast<void *>(&msg_type),
-                          sizeof(msg_type), 0);
+              {
+                std::lock_guard<std::mutex> lock(mutex);
+                SendMessage(fd, reinterpret_cast<void *>(&msg_type),
+                            sizeof(msg_type), 0);
+              }
             } else {
               msg_type = static_cast<unsigned>(MsgType::kError);
-              SendMessage(fd, reinterpret_cast<void *>(&msg_type),
-                          sizeof(msg_type), 0);
+              {
+                std::lock_guard<std::mutex> lock(mutex);
+                SendMessage(fd, reinterpret_cast<void *>(&msg_type),
+                            sizeof(msg_type), 0);
+              }
             }
+          } break;
+          case MsgType::kHeartBeat: {
+            recv_heartbeat = true;
           } break;
           default:
             std::cout << "unknown message type: " << msg_type << std::endl;
           case MsgType::kDisconnect: {
+            close(fd);
             std::lock_guard<std::mutex> lock(clients_mutex_);
             clients_.erase(fd);
             char address[INET_ADDRSTRLEN];
@@ -143,6 +196,18 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
             return;
           }
         }
+      }
+      // check if alive
+      if (alive.wait_for(std::chrono::milliseconds(1)) ==
+          std::future_status::ready) {
+        close(fd);
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        clients_.erase(fd);
+        char address[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
+        std::cout << address << ':' << addr.sin_port
+                  << " disconnected accidentally." << std::endl;
+        return;
       }
     }
   };
