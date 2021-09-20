@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 			// 创建一个socket：
 			if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 			{
-				printf("socket() failed! code:%d\n", errno);
+				cout << "socket() failed! code:" << errno  << endl;
 				return -1;
 			}
 
@@ -51,16 +51,15 @@ int main(int argc, char *argv[])
 			serverAddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
 			bzero(&(serverAddr.sin_zero), 8);
 
-			//客户端发出连接请求：
-			printf("Connecting to Server %s : %d\n", ipaddr.c_str(), port);
+			//客户端发出连接请求：			
+			cout << "Connecting to Server " << ipaddr.c_str() << ":" << port << endl;
 			if (connect(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
-			{
-				printf("connect() failed! code:%d\n", errno);
+			{				
+				cout << "connect() failed! code:" << errno << endl;
 				close(sockfd);
 				return -1;
 			}
-
-			printf("Connected!\n");
+			cout << "Connect Success!" << endl;
 			break;
 		}
 		case 2:
@@ -93,7 +92,8 @@ int main(int argc, char *argv[])
 				else
 				{
 					timestr = localtime(&cur_time_);
-					printf("Current Time is: %s", asctime(timestr));
+					string time_str = asctime(timestr);
+					cout << "Current Time is: " << time_str << endl;					
 				}
 			}
 			break;
@@ -196,18 +196,6 @@ int main(int argc, char *argv[])
 			cout << "Wrong Option Number!" << endl;
 			break;
 		}
-
-		// strcpy(stu.name, argv[2]);
-		// stu.age = atoi(argv[3]);
-		// if (send(sockfd, (char *)&stu, sizeof(stu), 0) == -1)
-		// {
-		// 	printf("send() failed!\n");
-		// 	close(sockfd);
-		// 	return -1;
-		// }
-
-		// printf("student info has been sent!\n");
-		// close(sockfd); //关闭套接字
-		// return 0;
 	}
 }
+
