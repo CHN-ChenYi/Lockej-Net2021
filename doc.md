@@ -36,8 +36,10 @@
 
 ### 活动连接列表
 
-[size_t, [int, struct sockaddr]*size_t]
+[int, size_t, [int, struct sockaddr]*size_t]
 
+* int
+  * 自己的编号
 * size_t
   * 活动连接个数
 * [int, struct sockaddr]*size_t
