@@ -168,6 +168,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd)
             std::lock_guard<std::mutex> lock(mutex);
             SendMessage(fd, reinterpret_cast<void *>(&msg_type),
                         sizeof(msg_type), 0);
+            SendMessage(fd, reinterpret_cast<const void *>(&fd),
+                        sizeof(fd), 0);
             SendMessage(fd, reinterpret_cast<const void *>(&list_len),
                         sizeof(list_len), 0);
             for (const auto &client : clients_)
