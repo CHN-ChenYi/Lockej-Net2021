@@ -110,6 +110,9 @@ void RecvMsg()
 
 			case MsgType::kList:
 			{
+				recv(sockfd, reinterpret_cast<void *>(&src), sizeof(src), 0);
+				num = to_string(src);
+				msgQ.push("Yourself is Host: " + num);
 				recv(sockfd, reinterpret_cast<void *>(&list_len), sizeof(list_len), 0);
 				for (size_t i = 0; i < list_len; i++, cout << endl)
 				{
