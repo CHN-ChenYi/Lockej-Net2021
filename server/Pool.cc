@@ -165,7 +165,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                         sizeof(char) * msg_len, 0);
             std::cout << "Sent Message to " << dst << " from " << fd << ": "
                       << msg << std::endl;
-            if (msg_queues_.count(dst)) {
+            if (clients_.count(dst)) {
               msg_queues_[dst].push(MessageInfo{fd, msg});
               msg_type = static_cast<unsigned>(MsgType::kSuccess);
               {
