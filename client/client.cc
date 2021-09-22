@@ -125,26 +125,28 @@ void RecvMsg()
 					msgQ.push(temp);
 				}
 				msgQ.push("\n");
+				break;
 			}
 
 			case MsgType::kMsg:
 			{
 				recv(sockfd, reinterpret_cast<void *>(&src), sizeof(src), 0);
-				recv(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0);
-				cout << "len= " << msg_len << endl;
+				recv(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0);				
 				msg_content.resize(msg_len);
 				recv(sockfd, reinterpret_cast<void *>(msg_content.data()), sizeof(char) * msg_len, 0);
 				num = to_string(src);
-				temp = "Message from Host " + num + ": " + msg_content + "\n";
-				cout << "msg= " << msg_content << endl;
+				temp = "Message from Host " + num + ": " + msg_content + "\n";				
 				msgQ.push(temp);
+				break;
 			}
 			
 			case MsgType::kSuccess:
 				msgQ.push("Message Sent Success!");
+				break;
 
 			case MsgType::kError:
 				msgQ.push("Message Sent Error!");
+				break;
 
 			default:
 				break;
@@ -320,7 +322,7 @@ int Request(int option)
 				cout << "please enter your message to host " << dst << " :" << endl;
 				getline(cin, msg);
 				getline(cin, msg);
-				msg_len = msg.length() * sizeof(char);
+				msg_len = msg.length() * sizeof(char);				
 				if (send(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0) == -1)
 					cout << "Communication Error! " << endl;
 				else if (send(sockfd, reinterpret_cast<void *>(msg.data()), msg_len, 0) == -1)
