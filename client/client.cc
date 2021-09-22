@@ -131,12 +131,20 @@ void RecvMsg()
 			{
 				recv(sockfd, reinterpret_cast<void *>(&src), sizeof(src), 0);
 				recv(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0);
+				cout << "len= " << msg_len << endl;
 				msg_content.resize(msg_len);
 				recv(sockfd, reinterpret_cast<void *>(msg_content.data()), sizeof(char) * msg_len, 0);
 				num = to_string(src);
 				temp = "Message from Host " + num + ": " + msg_content + "\n";
+				cout << "msg= " << msg_content << endl;
 				msgQ.push(temp);
 			}
+			
+			case MsgType::kSuccess:
+				msgQ.push("Message Sent Success!");
+
+			case MsgType::kError:
+				msgQ.push("Message Sent Error!");
 
 			default:
 				break;
@@ -319,13 +327,13 @@ int Request(int option)
 					cout << "Communication Error! " << endl;
 				else
 				{
-					recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
-					const MsgType msg_type_ = static_cast<MsgType>(msg_type);
-					if (msg_type_ == MsgType::kSuccess)
-						cout << "Message Sent Success!" << endl;
-					else
-						cout << "Message Sent Error!" << endl;
-					cin.sync();
+					// recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
+					// const MsgType msg_type_ = static_cast<MsgType>(msg_type);
+					// if (msg_type_ == MsgType::kSuccess)
+					// 	cout << "Message Sent Success!" << endl;
+					// else
+					// 	cout << "Message Sent Error!" << endl;
+					// cin.sync();
 				}
 			}
 		}
