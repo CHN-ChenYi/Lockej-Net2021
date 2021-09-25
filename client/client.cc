@@ -10,8 +10,10 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <signal.h>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <future>
 #include "../MsgDef.hpp"
 #include "Queue.hpp"
@@ -20,11 +22,42 @@ using namespace std;
 
 extern int errno;
 int sockfd;
-bool conn;
-bool quit;
+std::atomic<bool> conn;
+std::atomic<bool> quit;
+std::atomic<bool> recv_heartbeat;
 int GetOption();
-int Request(int option);
+int Request(int option, std::mutex *mutex);
 void RecvMsg();
+auto Heartbeat = [](int *fd, std::atomic<bool> *conn, std::atomic<bool> *quit, std::atomic<bool> *recv_heartbeat, std::mutex *mutex)
+{
+	signal(SIGPIPE, SIG_IGN);  // don't exit when send's errno = 32
+	int heartbeat_counter = 0;
+	unsigned msg_type = static_cast<unsigned>(MsgType::kHeartBeat);
+	while (!*quit)
+	{
+		std::this_thread::sleep_for(kHeartBeatInterval);
+		if (*conn) {
+			{
+				std::lock_guard<std::mutex> lock(*mutex);
+				if (!~send(*fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0)) {
+					if (errno == 104 || errno == 9 || errno == 32)
+						return;  // peer closed || closed by server
+					std::cerr << "send() heartbeat failed! errno: " << errno
+										<< std::endl;
+				}
+			}
+			if (*recv_heartbeat) {
+				heartbeat_counter = 0;
+				*recv_heartbeat = false;
+			} else {
+				heartbeat_counter++;
+				if (heartbeat_counter >= kHeartBeatThreshold) return;
+			}
+		} else {
+			heartbeat_counter = 0;
+		}
+	}
+};
 
 ThreadSafeQueue<string> msgQ;
 
@@ -34,8 +67,11 @@ int main(int argc, char *argv[])
 	int option;
 	quit = false;
 	conn = false;
+	std::mutex mutex;
 	future<void> recvMsg = async(launch::async, RecvMsg);
 	future<int> getOption = async(launch::async, GetOption);
+
+	std::future<void> alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
 
 	cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 	while (1)
@@ -48,10 +84,18 @@ int main(int argc, char *argv[])
 		if (getOption.wait_for(chrono::milliseconds(1)) == std::future_status::ready)
 		{
 			option = getOption.get();
-			if (Request(option) == -1)
+			if (Request(option, &mutex) == -1)
 				return 0;
 			cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 			getOption = async(launch::async, GetOption);
+		}
+		if (conn && alive.wait_for(std::chrono::milliseconds(1)) ==
+				std::future_status::ready)
+		{
+			cout << "Communication Error, close locally." << endl;
+			close(sockfd);
+			conn = false;
+			alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
 		}
 	}
 }
@@ -154,6 +198,10 @@ void RecvMsg()
 				msgQ.push("Message Sent Error!");
 				break;
 
+			case MsgType::kHeartBeat:
+				recv_heartbeat = true;
+				break;
+
 			default:
 				break;
 			}
@@ -161,7 +209,7 @@ void RecvMsg()
 	}
 }
 
-int Request(int option)
+int Request(int option, std::mutex *mutex)
 {
 	// int option;
 	unsigned msg_type;
@@ -169,20 +217,6 @@ int Request(int option)
 	static int port;
 	struct sockaddr_in serverAddr;
 	string temp;
-
-	// std::atomic<bool> heart_beating = true;
-	// std::future<void> alive = std::async(
-	// 	std::launch::async,
-	// 	[](int *fd, std::atomic<bool> *heart_beating)
-	// 	{
-	// 		unsigned msg_type = static_cast<unsigned>(MsgType::kHeartBeat);
-	// 		while (*heart_beating)
-	// 		{
-	// 			std::this_thread::sleep_for(kHeartBeatInterval);
-	// 			send(*fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0);
-	// 		}
-	// 	},
-	// 	&sockfd, &heart_beating);
 
 	switch (option)
 	{
@@ -223,10 +257,13 @@ int Request(int option)
 	{
 		//关闭socket
 		msg_type = static_cast<unsigned>(MsgType::kDisconnect);
-		if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
-			cout << "Communication Error, close locally." << endl;
+		{
+			std::lock_guard<std::mutex> lock(*mutex);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error, close locally." << endl;
+		}
 		close(sockfd);
-		cout << "Connection to " << ipaddr << " : " << port << " is closed! \n"
+		cout << "Connection to " << ipaddr << ":" << port << " is closed! \n"
 			 << endl;
 		conn = false;
 		break;
@@ -236,8 +273,11 @@ int Request(int option)
 		//获取时间
 
 		msg_type = static_cast<unsigned>(MsgType::kTime);
-		if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
-			cout << "Communication Error! " << endl;
+		{
+			std::lock_guard<std::mutex> lock(*mutex);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+		}
 
 		break;
 	}
@@ -245,8 +285,11 @@ int Request(int option)
 	{
 
 		msg_type = static_cast<unsigned>(MsgType::kHostname);
-		if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
-			cout << "Communication Error! " << endl;
+		{
+			std::lock_guard<std::mutex> lock(*mutex);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+		}
 
 		break;
 	}
@@ -254,8 +297,11 @@ int Request(int option)
 	{
 
 		msg_type = static_cast<unsigned>(MsgType::kList);
-		if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
-			cout << "Communication Error! " << endl;
+		{
+			std::lock_guard<std::mutex> lock(*mutex);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
+				cout << "Communication Error! " << endl;
+		}
 		break;
 	}
 
@@ -265,25 +311,27 @@ int Request(int option)
 		string msg;
 		size_t msg_len;
 		msg_type = static_cast<unsigned>(MsgType::kMsg);
-		if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
-			cout << "Communication Error! " << endl;
-		else
+		cout << "please enter your destination host:" << endl;
+		cin >> dst;
+		cout << "please enter your message to host " << dst << " :" << endl;
+		getline(cin, msg);
+		getline(cin, msg);
+		msg_len = msg.length() * sizeof(char);
 		{
-			cout << "please enter your destination host:" << endl;
-			cin >> dst;
-			if (send(sockfd, reinterpret_cast<void *>(&dst), sizeof(dst), 0) == -1)
+			std::lock_guard<std::mutex> lock(*mutex);
+			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
 				cout << "Communication Error! " << endl;
 			else
 			{
-				cout << "please enter your message to host " << dst << " :" << endl;
-				getline(cin, msg);
-				getline(cin, msg);
-				msg_len = msg.length() * sizeof(char);				
-				if (send(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0) == -1)
+				if (send(sockfd, reinterpret_cast<void *>(&dst), sizeof(dst), 0) == -1)
 					cout << "Communication Error! " << endl;
-				else if (send(sockfd, reinterpret_cast<void *>(msg.data()), msg_len, 0) == -1)
-					cout << "Communication Error! " << endl;
-
+				else
+				{
+					if (send(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0) == -1)
+						cout << "Communication Error! " << endl;
+					else if (send(sockfd, reinterpret_cast<void *>(msg.data()), msg_len, 0) == -1)
+						cout << "Communication Error! " << endl;
+				}
 			}
 		}
 		break;
