@@ -22,6 +22,7 @@ extern int errno;
 int sockfd;
 bool conn;
 bool quit;
+int GetOption();
 int Request(int option);
 void RecvMsg();
 
@@ -34,27 +35,32 @@ int main(int argc, char *argv[])
 	quit = false;
 	conn = false;
 	future<void> recvMsg = async(launch::async, RecvMsg);
+	future<int> getOption = async(launch::async, GetOption);
 
+	cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 	while (1)
 	{
-		// recvMsg.wait_for(chrono::milliseconds(1));
-		if (msgQ.empty())
-		{
-			cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
-			cin >> option;
-			if (!(Request(option) == -1))
-				std::this_thread::sleep_for(10ms);
-			else
-			{
-				return 0;
-			}
-		}
-		else
+		if (!msgQ.empty())
 		{
 			msgQ.pop(msg);
 			cout << msg << endl;
 		}
+		if (getOption.wait_for(chrono::milliseconds(1)) == std::future_status::ready)
+		{
+			option = getOption.get();
+			if (Request(option) == -1)
+				return 0;
+			cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
+			getOption = async(launch::async, GetOption);
+		}
 	}
+}
+
+int GetOption()
+{
+	int option;
+	cin >> option;
+	return option;
 }
 
 void RecvMsg()
