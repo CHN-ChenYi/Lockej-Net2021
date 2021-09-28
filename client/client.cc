@@ -130,7 +130,6 @@ void RecvMsg()
 
 	while (1)
 	{
-
 		ioctl(sockfd, FIONREAD, &count);
 		if (quit)
 			break;
@@ -157,7 +156,6 @@ void RecvMsg()
 
 				break;
 			}
-
 			case MsgType::kList:
 			{
 				recv(sockfd, reinterpret_cast<void *>(&src), sizeof(src), 0);
@@ -177,7 +175,6 @@ void RecvMsg()
 				msgQ.push("\n");
 				break;
 			}
-
 			case MsgType::kMsg:
 			{
 				recv(sockfd, reinterpret_cast<void *>(&src), sizeof(src), 0);
@@ -189,7 +186,6 @@ void RecvMsg()
 				msgQ.push(temp);
 				break;
 			}
-			
 			case MsgType::kSuccess:
 				msgQ.push("Message Sent Success!");
 				break;
@@ -255,7 +251,12 @@ int Request(int option, std::mutex *mutex)
 	}
 	case 2:
 	{
-		//关闭socket
+		//
+		if(!conn)
+		{
+			cout << "No connection on! Please connect to server first" << endl;
+			break;
+		}
 		msg_type = static_cast<unsigned>(MsgType::kDisconnect);
 		{
 			std::lock_guard<std::mutex> lock(*mutex);
@@ -311,6 +312,11 @@ int Request(int option, std::mutex *mutex)
 		string msg;
 		size_t msg_len;
 		msg_type = static_cast<unsigned>(MsgType::kMsg);
+		if(!conn)
+		{
+			cout << "No connection on! Please connect to server first" << endl;
+			break;
+		}
 		cout << "please enter your destination host:" << endl;
 		cin >> dst;
 		cout << "please enter your message to host " << dst << " :" << endl;

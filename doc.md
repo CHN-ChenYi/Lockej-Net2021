@@ -4,7 +4,7 @@
 
 ## 数据头
 
-[unsigned]
+`[unsigned]`
 
 * unsigned
   * -1 心跳包
@@ -18,25 +18,25 @@
 
 ## 数据
 
-### 获取时间
+##### 获取时间
 
-[std::time_t]
+`[std::time_t]`
 
 * std::time_t
   * 时间
 
-### 获取名字
+##### 获取名字
 
-[size_t, [char]*size_t]
+`[size_t, [char]*size_t]`
 
 * size_t
   * 字符串长度（不含 `\0`）
 * [char]*size_t
   * 名字
 
-### 活动连接列表
+##### 活动连接列表
 
-[int, size_t, [int, struct sockaddr]*size_t]
+`[int, size_t, [int, struct sockaddr]*size_t]`
 
 * int
   * 自己的编号
@@ -46,9 +46,9 @@
   * int: 编号
   * struct sockaddr: socket 信息
 
-### 发消息
+##### 发消息
 
-[int, size_t, char*size_t]
+`[int, size_t, char*size_t]`
 
 * int
   * 编号
