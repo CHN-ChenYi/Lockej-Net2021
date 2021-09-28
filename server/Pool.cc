@@ -166,7 +166,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
             msg.resize(msg_len);
             RecvMessage(fd, reinterpret_cast<void *>(msg.data()),
                         sizeof(char) * msg_len, 0);
-            std::cout << "Sent Message to " << dst << " from " << fd << ": "
+            std::cout << "Send Message to " << dst << " from " << fd << ": "
                       << msg << std::endl;
             if (msg_queues_.count(dst)) {
               msg_queues_[dst].push(MessageInfo{fd, msg});
