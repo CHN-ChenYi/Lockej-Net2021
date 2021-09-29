@@ -48,6 +48,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
   }
   auto f = [this, addr, fd]() {
     std::mutex mutex;
+#ifdef HEARTBEAT
     std::atomic<bool> recv_heartbeat = false;
     std::future<void> alive = std::async(
         std::launch::async,
@@ -77,6 +78,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           }
         },
         &mutex, &recv_heartbeat);
+#endif
     unsigned msg_type;
     for (;;) {
       // exit
@@ -185,9 +187,11 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
               }
             }
           } break;
+#ifdef HEARTBEAT
           case MsgType::kHeartBeat: {
             recv_heartbeat = true;
           } break;
+#endif
           default:
             std::cout << "unknown message type: " << msg_type << std::endl;
           case MsgType::kDisconnect: {
@@ -202,6 +206,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
           }
         }
       }
+#ifdef HEARTBEAT
       // check if alive
       if (alive.wait_for(std::chrono::milliseconds(1)) ==
           std::future_status::ready) {
@@ -214,6 +219,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                   << " disconnected accidentally." << std::endl;
         return;
       }
+#endif
     }
   };
   threads_[fd] =

@@ -24,10 +24,11 @@ extern int errno;
 int sockfd;
 std::atomic<bool> conn;
 std::atomic<bool> quit;
-std::atomic<bool> recv_heartbeat;
 int GetOption();
 int Request(int option, std::mutex *mutex);
 void RecvMsg();
+#ifdef HEARTBEAT
+std::atomic<bool> recv_heartbeat;
 auto Heartbeat = [](int *fd, std::atomic<bool> *conn, std::atomic<bool> *quit, std::atomic<bool> *recv_heartbeat, std::mutex *mutex)
 {
 	signal(SIGPIPE, SIG_IGN);  // don't exit when send's errno = 32
@@ -58,6 +59,7 @@ auto Heartbeat = [](int *fd, std::atomic<bool> *conn, std::atomic<bool> *quit, s
 		}
 	}
 };
+#endif
 
 ThreadSafeQueue<string> msgQ;
 
@@ -71,7 +73,9 @@ int main(int argc, char *argv[])
 	future<void> recvMsg = async(launch::async, RecvMsg);
 	future<int> getOption = async(launch::async, GetOption);
 
+#ifdef HEARTBEAT
 	std::future<void> alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
+#endif
 
 	cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 	while (1)
@@ -89,6 +93,7 @@ int main(int argc, char *argv[])
 			cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 			getOption = async(launch::async, GetOption);
 		}
+#ifdef HEARTBEAT
 		if (conn && alive.wait_for(std::chrono::milliseconds(1)) ==
 				std::future_status::ready)
 		{
@@ -97,6 +102,7 @@ int main(int argc, char *argv[])
 			conn = false;
 			alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
 		}
+#endif
 	}
 }
 
@@ -193,11 +199,11 @@ void RecvMsg()
 			case MsgType::kError:
 				msgQ.push("Message Sent Error!");
 				break;
-
+#ifdef HEARTBEAT
 			case MsgType::kHeartBeat:
 				recv_heartbeat = true;
 				break;
-
+#endif
 			default:
 				break;
 			}
