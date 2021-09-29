@@ -200,7 +200,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
             clients_.erase(fd);
             char address[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
-            std::cout << address << ':' << addr.sin_port << " disconnected."
+            std::cout << address << ':' << ntohs(addr.sin_port) << " disconnected."
                       << std::endl;
             return;
           }
@@ -215,7 +215,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         clients_.erase(fd);
         char address[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
-        std::cout << address << ':' << addr.sin_port
+        std::cout << address << ':' << ntohs(addr.sin_port)
                   << " disconnected accidentally." << std::endl;
         return;
       }

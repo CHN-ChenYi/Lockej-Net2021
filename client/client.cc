@@ -174,7 +174,7 @@ void RecvMsg()
 					recv(sockfd, reinterpret_cast<void *>(&addr), sizeof(addr), 0);
 					inet_ntop(AF_INET, &addr.sin_addr, addr_str, sizeof(addr_str));
 					num = to_string(fd);
-					port = to_string(addr.sin_port);
+					port = to_string(ntohs(addr.sin_port));
 					temp = "Socket fd: " + num + " Host Address: " + addr_str + ":" + port;
 					msgQ.push(temp);
 				}

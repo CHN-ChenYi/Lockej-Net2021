@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     }
     char addr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, addr, sizeof(addr));
-    std::cout << addr << ':' << clientAddr.sin_port << " connected."
+    std::cout << addr << ':' << ntohs(clientAddr.sin_port) << " connected."
               << std::endl;
     pool.AddClient(clientAddr, comfd);
   }
