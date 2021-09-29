@@ -15,7 +15,7 @@ using socket_fd = int;
 
 class Pool {
  public:
-  Pool(const std::string &hostname);
+  explicit Pool(const std::string &hostname);
   ~Pool();
   void AddClient(const sockaddr_in &addr, const socket_fd &fd);
 
