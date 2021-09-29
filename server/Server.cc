@@ -11,10 +11,9 @@
 
 int main(int argc, char **argv) {
   int port = kServerPort;
-  if (argc == 2) {
+  if (argc == 2) {  // the first arg is the port number, default is 4500
     int tmp = std::stoi(argv[1]);
-    if (0 <= tmp && tmp <= 65535)
-      port = tmp;
+    if (0 <= tmp && tmp <= 65535) port = tmp;
   }
 
   char hostname[HOST_NAME_MAX];
@@ -49,6 +48,7 @@ int main(int argc, char **argv) {
 
   std::cout << "Listening on port " << port << std::endl;
 
+  // get connection
   for (;;) {
     socket_fd comfd;
     sockaddr_in clientAddr;

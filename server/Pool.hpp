@@ -23,7 +23,7 @@ class Pool {
   std::string hostname_;
   size_t hostname_len_;
 
-  std::atomic<bool> is_exit_;
+  std::atomic<bool> is_exit_;  // to stop all threads during destruction
   std::mutex clients_mutex_;
   std::map<socket_fd, sockaddr_in> clients_;
   std::map<socket_fd, std::unique_ptr<std::thread>> threads_;

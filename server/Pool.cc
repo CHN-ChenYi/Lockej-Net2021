@@ -46,10 +46,12 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
     std::lock_guard<std::mutex> lock(clients_mutex_);
     clients_[fd] = addr;
   }
+  // thread function
   auto f = [this, addr, fd]() {
     std::mutex mutex;
 #ifdef HEARTBEAT
     std::atomic<bool> recv_heartbeat = false;
+    // send and process heartbeat
     std::future<void> alive = std::async(
         std::launch::async,
         [fd](std::mutex *const mutex, std::atomic<bool> *recv_heartbeat) {
@@ -80,6 +82,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         &mutex, &recv_heartbeat);
 #endif
     unsigned msg_type;
+    // main loop
     for (;;) {
       // exit
       if (is_exit_) {
@@ -112,10 +115,10 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
         std::cout << "Sent Message to " << fd << " from " << msg.src << ": "
                   << msg.content << std::endl;
       }
-      // handle requestint count;
+      // handle request
       int count;
       ioctl(fd, FIONREAD, &count);
-      if (count) {
+      if (count) {  // there's something to recv
         RecvMessage(fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type),
                     0);
         const MsgType msg_type_ = static_cast<MsgType>(msg_type);
@@ -170,7 +173,7 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
                         sizeof(char) * msg_len, 0);
             std::cout << "Send Message to " << dst << " from " << fd << ": "
                       << msg << std::endl;
-            if (msg_queues_.count(dst)) {
+            if (msg_queues_.count(dst)) {  // dst valid
               msg_queues_[dst].push(MessageInfo{fd, msg});
               msg_type = static_cast<unsigned>(MsgType::kSuccess);
               {
@@ -200,8 +203,8 @@ void Pool::AddClient(const sockaddr_in &addr, const socket_fd &fd) {
             clients_.erase(fd);
             char address[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &addr.sin_addr, address, sizeof(address));
-            std::cout << address << ':' << ntohs(addr.sin_port) << " disconnected."
-                      << std::endl;
+            std::cout << address << ':' << ntohs(addr.sin_port)
+                      << " disconnected." << std::endl;
             return;
           }
         }
