@@ -22,43 +22,55 @@ using namespace std;
 
 extern int errno;
 int sockfd;
-std::atomic<bool> conn;
-std::atomic<bool> quit;
+std::atomic<bool> conn; // whether the connection is on
+std::atomic<bool> quit; // whether the main thread is quit (to inform other thread)
 std::atomic<bool> recv_heartbeat;
+// function to get keyboard input
 int GetOption();
+// fuction to handle service request
 int Request(int option, std::mutex *mutex);
+// function to receieve message and push the message queue
 void RecvMsg();
+// function to generate and receive heartbeats to maintain connection
 auto Heartbeat = [](int *fd, std::atomic<bool> *conn, std::atomic<bool> *quit, std::atomic<bool> *recv_heartbeat, std::mutex *mutex)
 {
-	signal(SIGPIPE, SIG_IGN);  // don't exit when send's errno = 32
+	signal(SIGPIPE, SIG_IGN); // don't exit when send's errno = 32
 	int heartbeat_counter = 0;
 	unsigned msg_type = static_cast<unsigned>(MsgType::kHeartBeat);
 	while (!*quit)
 	{
 		std::this_thread::sleep_for(kHeartBeatInterval);
-		if (*conn) {
+		if (*conn)
+		{
 			{
 				std::lock_guard<std::mutex> lock(*mutex);
-				if (!~send(*fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0)) {
+				if (!~send(*fd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0))
+				{
 					if (errno == 104 || errno == 9 || errno == 32)
-						return;  // peer closed || closed by server
+						return; // peer closed || closed by server
 					std::cerr << "send() heartbeat failed! errno: " << errno
-										<< std::endl;
+							  << std::endl;
 				}
 			}
-			if (*recv_heartbeat) {
+			if (*recv_heartbeat)
+			{
 				heartbeat_counter = 0;
 				*recv_heartbeat = false;
-			} else {
-				heartbeat_counter++;
-				if (heartbeat_counter >= kHeartBeatThreshold) return;
 			}
-		} else {
+			else
+			{
+				heartbeat_counter++;
+				if (heartbeat_counter >= kHeartBeatThreshold)
+					return;
+			}
+		}
+		else
+		{
 			heartbeat_counter = 0;
 		}
 	}
 };
-
+// Queue of receieved message
 ThreadSafeQueue<string> msgQ;
 
 int main(int argc, char *argv[])
@@ -68,29 +80,30 @@ int main(int argc, char *argv[])
 	quit = false;
 	conn = false;
 	std::mutex mutex;
+	// thread of message receieving
 	future<void> recvMsg = async(launch::async, RecvMsg);
+	// thread of keyboard listening
 	future<int> getOption = async(launch::async, GetOption);
-
+	// thread of heartbeat monitor
 	std::future<void> alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
 
 	cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 	while (1)
 	{
-		if (!msgQ.empty())
+		if (!msgQ.empty()) // check if the message queue is empty
 		{
-			msgQ.pop(msg);
+			msgQ.pop(msg); //if there is message, print it
 			cout << msg << endl;
 		}
-		if (getOption.wait_for(chrono::milliseconds(1)) == std::future_status::ready)
+		if (getOption.wait_for(chrono::milliseconds(1)) == std::future_status::ready) // check if there is keyboard input
 		{
 			option = getOption.get();
-			if (Request(option, &mutex) == -1)
+			if (Request(option, &mutex) == -1) // handle the option
 				return 0;
 			cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 			getOption = async(launch::async, GetOption);
 		}
-		if (conn && alive.wait_for(std::chrono::milliseconds(1)) ==
-				std::future_status::ready)
+		if (conn && alive.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)	//check the heartbeat
 		{
 			cout << "Communication Error, close locally." << endl;
 			close(sockfd);
@@ -130,14 +143,14 @@ void RecvMsg()
 
 	while (1)
 	{
-		ioctl(sockfd, FIONREAD, &count);
+		ioctl(sockfd, FIONREAD, &count);	//check if the input buffer is empty
 		if (quit)
 			break;
 		if (conn && count)
 		{
-			recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(unsigned), 0);
+			recv(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(unsigned), 0); // get the msg_type and parsing
 			option = static_cast<MsgType>(msg_type);
-			switch (option)
+			switch (option)	//parsing the message and push corresponding information into the queue
 			{
 			case MsgType::kHostname:
 			{
@@ -178,11 +191,11 @@ void RecvMsg()
 			case MsgType::kMsg:
 			{
 				recv(sockfd, reinterpret_cast<void *>(&src), sizeof(src), 0);
-				recv(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0);				
+				recv(sockfd, reinterpret_cast<void *>(&msg_len), sizeof(msg_len), 0);
 				msg_content.resize(msg_len);
 				recv(sockfd, reinterpret_cast<void *>(msg_content.data()), sizeof(char) * msg_len, 0);
 				num = to_string(src);
-				temp = "Message from Host " + num + ": " + msg_content + "\n";				
+				temp = "Message from Host " + num + ": " + msg_content + "\n";
 				msgQ.push(temp);
 				break;
 			}
@@ -214,29 +227,30 @@ int Request(int option, std::mutex *mutex)
 	struct sockaddr_in serverAddr;
 	string temp;
 
-	switch (option)
+	switch (option)	// parsing the input and run related service
 	{
 	case 1:
 	{
+		//create a connection 
 		cout << "please enter IP address:" << endl;
 		cin >> ipaddr;
 		cout << "please enter port number:" << endl;
 		cin >> port;
 
-		// 创建一个socket：
+		// set up a socket：
 		if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		{
 			cout << "socket() failed! code:" << errno << endl;
 			return -1;
 		}
 
-		// 设置服务器的地址信息：
+		// set server information
 		serverAddr.sin_family = AF_INET;
 		serverAddr.sin_port = htons(port);
 		serverAddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
 		bzero(&(serverAddr.sin_zero), 8);
 
-		//客户端发出连接请求：
+		// send the connection info
 		cout << "Connecting to Server " << ipaddr.c_str() << ":" << port << endl;
 		if (connect(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
 		{
@@ -251,8 +265,8 @@ int Request(int option, std::mutex *mutex)
 	}
 	case 2:
 	{
-		//
-		if(!conn)
+		// break the connection
+		if (!conn)
 		{
 			cout << "No connection on! Please connect to server first" << endl;
 			break;
@@ -271,8 +285,7 @@ int Request(int option, std::mutex *mutex)
 	}
 	case 3:
 	{
-		//获取时间
-
+		//get the time
 		msg_type = static_cast<unsigned>(MsgType::kTime);
 		{
 			std::lock_guard<std::mutex> lock(*mutex);
@@ -284,19 +297,18 @@ int Request(int option, std::mutex *mutex)
 	}
 	case 4:
 	{
-
+		// get the hostname
 		msg_type = static_cast<unsigned>(MsgType::kHostname);
 		{
 			std::lock_guard<std::mutex> lock(*mutex);
 			if (send(sockfd, reinterpret_cast<void *>(&msg_type), sizeof(msg_type), 0) == -1)
 				cout << "Communication Error! " << endl;
 		}
-
 		break;
 	}
 	case 5:
 	{
-
+		// get the host list
 		msg_type = static_cast<unsigned>(MsgType::kList);
 		{
 			std::lock_guard<std::mutex> lock(*mutex);
@@ -308,11 +320,12 @@ int Request(int option, std::mutex *mutex)
 
 	case 6:
 	{
+		// send message to a client
 		int dst;
 		string msg;
 		size_t msg_len;
 		msg_type = static_cast<unsigned>(MsgType::kMsg);
-		if(!conn)
+		if (!conn)
 		{
 			cout << "No connection on! Please connect to server first" << endl;
 			break;
@@ -342,10 +355,9 @@ int Request(int option, std::mutex *mutex)
 		}
 		break;
 	}
-
 	case 7:
 	{
-		// heart_beating = false;
+		// quit the client
 		cout << "Bye bye~" << endl;
 		quit = true;
 		return -1;
