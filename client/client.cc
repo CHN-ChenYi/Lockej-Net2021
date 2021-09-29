@@ -215,7 +215,7 @@ int Request(int option, std::mutex *mutex)
 {
 	// int option;
 	unsigned msg_type;
-	string ipaddr;
+	static string ipaddr;
 	static int port;
 	struct sockaddr_in serverAddr;
 	string temp;
