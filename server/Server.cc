@@ -11,10 +11,9 @@
 
 int main(int argc, char **argv) {
   int port = kServerPort;
-  if (argc == 2) {
+  if (argc == 2) {  // the first arg is the port number, default is 4500
     int tmp = std::stoi(argv[1]);
-    if (0 <= tmp && tmp <= 65535)
-      port = tmp;
+    if (0 <= tmp && tmp <= 65535) port = tmp;
   }
 
   char hostname[HOST_NAME_MAX];
@@ -49,6 +48,7 @@ int main(int argc, char **argv) {
 
   std::cout << "Listening on port " << port << std::endl;
 
+  // get connection
   for (;;) {
     socket_fd comfd;
     sockaddr_in clientAddr;
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     }
     char addr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, addr, sizeof(addr));
-    std::cout << addr << ':' << clientAddr.sin_port << " connected."
+    std::cout << addr << ':' << ntohs(clientAddr.sin_port) << " connected."
               << std::endl;
     pool.AddClient(clientAddr, comfd);
   }

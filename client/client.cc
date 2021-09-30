@@ -22,16 +22,26 @@ using namespace std;
 
 extern int errno;
 int sockfd;
+<<<<<<< HEAD
 std::atomic<bool> conn; // whether the connection is on
 std::atomic<bool> quit; // whether the main thread is quit (to inform other thread)
 std::atomic<bool> recv_heartbeat;
 // function to get keyboard input
+=======
+std::atomic<bool> conn;
+std::atomic<bool> quit;
+>>>>>>> 0b83a9b61c800747ded88d72ff1322163a8bf4ec
 int GetOption();
 // fuction to handle service request
 int Request(int option, std::mutex *mutex);
 // function to receieve message and push the message queue
 void RecvMsg();
+<<<<<<< HEAD
 // function to generate and receive heartbeats to maintain connection
+=======
+#ifdef HEARTBEAT
+std::atomic<bool> recv_heartbeat;
+>>>>>>> 0b83a9b61c800747ded88d72ff1322163a8bf4ec
 auto Heartbeat = [](int *fd, std::atomic<bool> *conn, std::atomic<bool> *quit, std::atomic<bool> *recv_heartbeat, std::mutex *mutex)
 {
 	signal(SIGPIPE, SIG_IGN); // don't exit when send's errno = 32
@@ -70,7 +80,12 @@ auto Heartbeat = [](int *fd, std::atomic<bool> *conn, std::atomic<bool> *quit, s
 		}
 	}
 };
+<<<<<<< HEAD
 // Queue of receieved message
+=======
+#endif
+
+>>>>>>> 0b83a9b61c800747ded88d72ff1322163a8bf4ec
 ThreadSafeQueue<string> msgQ;
 
 int main(int argc, char *argv[])
@@ -84,8 +99,14 @@ int main(int argc, char *argv[])
 	future<void> recvMsg = async(launch::async, RecvMsg);
 	// thread of keyboard listening
 	future<int> getOption = async(launch::async, GetOption);
+<<<<<<< HEAD
 	// thread of heartbeat monitor
+=======
+
+#ifdef HEARTBEAT
+>>>>>>> 0b83a9b61c800747ded88d72ff1322163a8bf4ec
 	std::future<void> alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
+#endif
 
 	cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 	while (1)
@@ -103,13 +124,20 @@ int main(int argc, char *argv[])
 			cout << "please enter service number: \n-1 Connect Server\n-2 Close Connection\n-3 Get Time\n-4 Get HostName\n-5 Get List\n-6 Send Message\n-7 Quit\n";
 			getOption = async(launch::async, GetOption);
 		}
+<<<<<<< HEAD
 		if (conn && alive.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)	//check the heartbeat
+=======
+#ifdef HEARTBEAT
+		if (conn && alive.wait_for(std::chrono::milliseconds(1)) ==
+				std::future_status::ready)
+>>>>>>> 0b83a9b61c800747ded88d72ff1322163a8bf4ec
 		{
 			cout << "Communication Error, close locally." << endl;
 			close(sockfd);
 			conn = false;
 			alive = std::async(std::launch::async, Heartbeat, &sockfd, &conn, &quit, &recv_heartbeat, &mutex);
 		}
+#endif
 	}
 }
 
@@ -181,7 +209,7 @@ void RecvMsg()
 					recv(sockfd, reinterpret_cast<void *>(&addr), sizeof(addr), 0);
 					inet_ntop(AF_INET, &addr.sin_addr, addr_str, sizeof(addr_str));
 					num = to_string(fd);
-					port = to_string(addr.sin_port);
+					port = to_string(ntohs(addr.sin_port));
 					temp = "Socket fd: " + num + " Host Address: " + addr_str + ":" + port;
 					msgQ.push(temp);
 				}
@@ -206,11 +234,11 @@ void RecvMsg()
 			case MsgType::kError:
 				msgQ.push("Message Sent Error!");
 				break;
-
+#ifdef HEARTBEAT
 			case MsgType::kHeartBeat:
 				recv_heartbeat = true;
 				break;
-
+#endif
 			default:
 				break;
 			}
@@ -222,7 +250,7 @@ int Request(int option, std::mutex *mutex)
 {
 	// int option;
 	unsigned msg_type;
-	string ipaddr;
+	static string ipaddr;
 	static int port;
 	struct sockaddr_in serverAddr;
 	string temp;
